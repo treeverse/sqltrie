@@ -44,7 +44,7 @@ tests = [
 ]
 dev = [
   "sqltrie[tests]",
-  "mypy==1.18.2"
+  "mypy==1.19.0"
 ]
 
 [project.entry-points.pyinstaller40]

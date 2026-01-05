@@ -36,7 +36,7 @@ Source = "https://github.com/efiop/sqltrie"
 [project.optional-dependencies]
 tests = [
   "pyinstaller",
-  "pytest>=7,<9",
+  "pytest>=7,<10",
   "pytest-benchmark",
   "pytest-cov>=4.1.0",
   "pytest-mock",

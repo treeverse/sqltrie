@@ -61,7 +61,9 @@ steps (id, pid, name, path, has_value, value, depth) AS (
         nodes.has_value,
         nodes.value,
         steps.depth + 1
-    FROM nodes, steps, temp_split
+    -- Resolve the parent and next path component before looking up the node.
+    -- Otherwise SQLite may scan all siblings using the parent-only index.
+    FROM steps CROSS JOIN temp_split CROSS JOIN nodes
     WHERE
         nodes.pid == steps.id
         AND temp_split.depth == steps.depth + 1

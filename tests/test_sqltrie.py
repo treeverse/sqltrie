@@ -104,6 +104,27 @@ def test_set_get(cls):
 
 
 @pytest.mark.parametrize("cls", [SQLiteTrie, PyGTrie])
+@pytest.mark.parametrize("name", ["", "/", "foo/bar"])
+def test_unusual_key_component(cls, name):
+    trie = cls()
+
+    trie[(name,)] = b"1"
+    trie[("qux", name)] = b"2"
+    trie[(name, "qux", "xyz")] = b"3"
+
+    assert trie[(name,)] == b"1"
+    assert trie[("qux", name)] == b"2"
+    assert trie[(name, "qux", "xyz")] == b"3"
+    assert trie.longest_prefix(()) is None
+    assert trie.longest_prefix((name, "qux")) == ((name,), b"1")
+    assert set(trie.items()) == {
+        ((name,), b"1"),
+        (("qux", name), b"2"),
+        ((name, "qux", "xyz"), b"3"),
+    }
+
+
+@pytest.mark.parametrize("cls", [SQLiteTrie, PyGTrie])
 def test_set_get_root(cls):
     trie = cls()
 

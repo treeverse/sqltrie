@@ -34,6 +34,10 @@ repos:
     hooks:
       - id: pretty-format-toml
         args: [--autofix, --no-sort]
+        # toml-sort 0.25 dropped Python 3.9 and formats inline tables
+        # differently, so unpinned, lint disagrees across the test matrix.
+        # Unpin once Python 3.9 is dropped.
+        additional_dependencies: ["toml-sort==0.24.4"]
       - id: pretty-format-yaml
         args: [--autofix, --indent, '2', '--offset', '2', --preserve-quotes]
 # NOTE: temporarily skipped

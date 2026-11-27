@@ -35,9 +35,6 @@ ROOT_NAME = "/"
 
 INIT_SQL = (scripts / "init.sql").read_text()
 
-STEPS_SQL = (scripts / "steps.sql").read_text()
-STEPS_TABLE = "temp_steps"
-
 DIFF_SQL = (scripts / "diff.sql").read_text()
 DIFF_TABLE = "temp_diff"
 
@@ -54,9 +51,7 @@ class _SQLiteTrieNode:
 
     @classmethod
     def from_step(cls, step: sqlite3.Row):
-        kwargs = dict(step)
-        kwargs.pop("path", None)
-        return cls(**kwargs)
+        return cls(**step)
 
     def get_children(
         self,
@@ -162,12 +157,8 @@ class SQLiteTrie(AbstractTrie):
             pass
 
         rows = self._traverse(key)
-        if rows:
-            longest_prefix = tuple(rows[-1]["path"].split("/"))
-            pid = rows[-1]["id"]
-        else:
-            longest_prefix = ()
-            pid = self._root_id
+        longest_prefix = key[: len(rows)]
+        pid = rows[-1]["id"] if rows else self._root_id
         self._ids[longest_prefix] = pid
 
         node_key = longest_prefix
@@ -188,10 +179,36 @@ class SQLiteTrie(AbstractTrie):
         return pid
 
     def _traverse(self, key):
-        path = "/".join(key).replace("'", "''")
-        self._conn.executescript(STEPS_SQL.format(path=path, root=self._root_id))
+        """Return the node of each component of the key, up to the first missing one."""
+        if not key:
+            return []
 
-        return self._conn.execute(f"SELECT * FROM {STEPS_TABLE}").fetchall()  # nosec  # noqa: S608
+        conn = self._conn
+        # Read all the steps in one transaction, so that another connection
+        # committing in the middle of the walk cannot make us return a mix of
+        # two states. A transaction that is already open is the caller's: it
+        # already provides that, and it is not ours to end.
+        own_transaction = not conn.in_transaction
+        if own_transaction:
+            conn.execute("BEGIN")
+        try:
+            rows = []
+            pid = self._root_id
+            for name in key:
+                row = conn.execute(
+                    """
+                    SELECT * FROM nodes WHERE pid == ? AND name == ?
+                    """,
+                    (pid, name),
+                ).fetchone()
+                if row is None:
+                    break
+                rows.append(row)
+                pid = row["id"]
+            return rows
+        finally:
+            if own_transaction:
+                conn.commit()
 
     def _get_node(self, key):
         if not key:
@@ -283,14 +300,11 @@ class SQLiteTrie(AbstractTrie):
         return len(list(self.items()))
 
     def prefixes(self, key: TrieKey) -> Iterator[TrieStep]:
-        for row in self._traverse(key):
+        for depth, row in enumerate(self._traverse(key), start=1):
             if not row["has_value"]:
                 continue
 
-            yield (
-                tuple(row["path"].split("/")),
-                row["value"],
-            )
+            yield key[:depth], row["value"]
 
     def shortest_prefix(self, key: TrieKey) -> Optional[TrieStep]:
         return next(self.prefixes(key), None)
